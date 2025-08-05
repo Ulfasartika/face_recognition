@@ -1,0 +1,7 @@
+Flask==2.3.3
+flask-cors==4.0.0
+opencv-python==4.9.0.80
+numpy==1.26.4
+tensorflow==2.14.0
+mtcnn==0.1.1
+mysql-connector-python==8.3.0
