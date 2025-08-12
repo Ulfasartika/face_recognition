@@ -25,8 +25,8 @@ db_config = {
 # --- Path and config ---
 DATA_DIR = 'face_data'
 ATTENDANCE_LOG = 'attendance_log.txt'
-THRESHOLD = 0.8
-UPDATE_THRESHOLD = 0.6  # Threshold untuk verifikasi wajah saat update (lebih ketat dari pengenalan)
+THRESHOLD = 0.5
+UPDATE_THRESHOLD = 0.5
 
 # --- Ensure directories exist ---
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -128,60 +128,11 @@ def register():
     save_embedding(user_id, embedding)
 
     # Save image for debugging
+
     filename = os.path.join(DATA_DIR, f"{user_id}_{int(time.time())}.jpg")
     cv2.imwrite(filename, face_image)
 
     return jsonify({"status": "success", "message": f"Face registered for {user_id}"}), 200
-
-@app.route('/api/update_face', methods=['POST'])
-def update_face():
-    user_id = request.form.get('user_id')
-    image_data = request.files.get('image')
-
-    if not user_id or not image_data:
-        return jsonify({"status": "error", "message": "User ID and image are required"}), 400
-
-    # Decode image
-    npimg = np.frombuffer(image_data.read(), np.uint8)
-    frame = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
-
-    # Detect face
-    faces = detector.detect_faces(frame)
-    if not faces:
-        return jsonify({"status": "error", "message": "No face detected"}), 400
-
-    # Get new face embedding
-    x, y, w, h = faces[0]['box']
-    face_image = frame[y:y+h, x:x+w]
-    new_embedding = get_embedding(face_image)
-
-    # Load existing embeddings for this user
-    embeddings = load_embeddings()
-    if str(user_id) not in embeddings:
-        return jsonify({"status": "error", "message": "No previous face data found for this user"}), 400
-
-    # Verify new face against existing embeddings
-    min_dist = float('inf')
-    for emb in embeddings[str(user_id)]:
-        dist = np.linalg.norm(new_embedding - emb)
-        if dist < min_dist:
-            min_dist = dist
-
-    if min_dist > UPDATE_THRESHOLD:
-        return jsonify({
-            "status": "error",
-            "message": "New face does not match previous face data",
-            "distance": float(min_dist)
-        }), 400
-
-    # Save new embedding if verification passes
-    save_embedding(user_id, new_embedding)
-
-    # Save image for debugging
-    filename = os.path.join(DATA_DIR, f"{user_id}_update_{int(time.time())}.jpg")
-    cv2.imwrite(filename, face_image)
-
-    return jsonify({"status": "success", "message": f"Face updated for user {user_id}"}), 200
 
 @app.route('/api/recognize', methods=['POST'])
 def recognize():
@@ -213,6 +164,22 @@ def recognize():
             if dist < min_dist:
                 min_dist = dist
                 best_match = known_id
+
+    # if min_dist < THRESHOLD:
+    #     with open(ATTENDANCE_LOG, 'a') as f:
+    #         f.write(f"{best_match},{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    #     return jsonify({
+    #         "status": "success",
+    #         "user_id": best_match,
+    #         "message": f"Recognized {best_match}",
+    #         "distance": float(min_dist)
+    #     }), 200
+    # else:
+    #     return jsonify({
+    #         "status": "error",
+    #         "message": "Face not recognized",
+    #         "distance": float(min_dist)
+    #     }), 400
 
     if best_match != "Unknown":
         with open(ATTENDANCE_LOG, 'a') as f:
